@@ -1,11 +1,24 @@
 package com.noop.ui
 
 import android.Manifest
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.noop.BuildConfig
@@ -43,7 +56,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             NoopTheme {
-                AppRoot()
+                NoopRoot()
             }
         }
     }
@@ -65,5 +78,94 @@ class MainActivity : ComponentActivity() {
         }.toTypedArray()
 
         if (needed.isNotEmpty()) permissionLauncher.launch(needed)
+    }
+}
+
+// MARK: - First-run / changelog gating (mirrors macOS ContentView.swift)
+//
+// Two persisted flags decide what the user sees on launch, exactly like the macOS
+// ZStack-over-RootView:
+//   • "noop.onboarded"               (Boolean, default false)
+//   • "noop.lastSeenChangelogVersion" (String,  default "")
+//
+// Gate:
+//   !onboarded                              → OnboardingScreen. On finish, mark onboarded
+//                                             AND set lastSeen = CURRENT_VERSION, so a brand-new
+//                                             user who just read the expectations doesn't ALSO
+//                                             get the changelog popped at them.
+//   onboarded && lastSeen != CURRENT_VERSION → existing user who updated: show WhatsNewSheet once,
+//                                             over the live AppRoot, until they dismiss it.
+//
+// SharedPreferences isn't reactive, so each value is read once into a remembered
+// mutableState and writes go through .edit().apply() + a state update to recompose.
+
+/** Shared accessor for the onboarding / changelog flags (the macOS @AppStorage equivalent). */
+object NoopPrefs {
+    const val NAME = "noop_prefs"
+    const val KEY_ONBOARDED = "noop.onboarded"
+    const val KEY_LAST_SEEN_CHANGELOG = "noop.lastSeenChangelogVersion"
+
+    fun of(context: Context): SharedPreferences =
+        context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+}
+
+/**
+ * Root gate around [AppRoot]. Reads the two prefs once, then renders onboarding,
+ * the changelog sheet, or just the app shell, updating both the store and local
+ * state on each transition.
+ */
+@Composable
+fun NoopRoot() {
+    val context = LocalContext.current
+    val prefs = remember { NoopPrefs.of(context) }
+
+    var onboarded by remember {
+        mutableStateOf(prefs.getBoolean(NoopPrefs.KEY_ONBOARDED, false))
+    }
+    var lastSeenChangelog by remember {
+        mutableStateOf(prefs.getString(NoopPrefs.KEY_LAST_SEEN_CHANGELOG, "") ?: "")
+    }
+
+    if (!onboarded) {
+        OnboardingScreen(
+            onFinished = {
+                // A brand-new user just saw the expectations in onboarding — don't also pop the
+                // changelog at them; mark them current (mirrors macOS ContentView onFinished).
+                prefs.edit()
+                    .putBoolean(NoopPrefs.KEY_ONBOARDED, true)
+                    .putString(NoopPrefs.KEY_LAST_SEEN_CHANGELOG, AppChangelog.CURRENT_VERSION)
+                    .apply()
+                lastSeenChangelog = AppChangelog.CURRENT_VERSION
+                onboarded = true
+            },
+        )
+        return
+    }
+
+    // Existing, onboarded user: render the app, and if they've updated since last launch
+    // (stored version behind current), show "What's New" once over the top.
+    AppRoot()
+
+    if (lastSeenChangelog != AppChangelog.CURRENT_VERSION) {
+        Dialog(
+            onDismissRequest = {
+                prefs.edit()
+                    .putString(NoopPrefs.KEY_LAST_SEEN_CHANGELOG, AppChangelog.CURRENT_VERSION)
+                    .apply()
+                lastSeenChangelog = AppChangelog.CURRENT_VERSION
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(modifier = Modifier.fillMaxSize(), color = Palette.surfaceBase) {
+                WhatsNewSheet(
+                    onClose = {
+                        prefs.edit()
+                            .putString(NoopPrefs.KEY_LAST_SEEN_CHANGELOG, AppChangelog.CURRENT_VERSION)
+                            .apply()
+                        lastSeenChangelog = AppChangelog.CURRENT_VERSION
+                    },
+                )
+            }
+        }
     }
 }

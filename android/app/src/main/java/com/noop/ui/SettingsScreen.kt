@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Sensors
@@ -34,6 +36,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -53,6 +56,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.BuildConfig
 import com.noop.analytics.Zones
@@ -159,6 +164,11 @@ fun SettingsScreen(vm: AppViewModel) {
     fun mutate(block: () -> Unit) { block(); rev++ }
 
     var backupBusy by remember { mutableStateOf(false) }
+
+    // "What's New" changelog sheet, reachable any time from About (mirrors the macOS
+    // Settings → About "What's new" button). Persistence/gating lives in NoopRoot; this
+    // is a manual re-open and writes nothing.
+    var showWhatsNew by remember { mutableStateOf(false) }
 
     // EXPERIMENTAL WHOOP 5/MG protocol probes (off by default). Mirrors the macOS @AppStorage toggle;
     // SharedPreferences isn't reactive, so the Switch drives a local mutableState that the store reads.
@@ -455,6 +465,40 @@ fun SettingsScreen(vm: AppViewModel) {
                     color = Palette.textSecondary,
                 )
 
+                // What's new — re-open the changelog sheet any time (macOS About parity).
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Palette.surfaceInset)
+                        .border(1.dp, Palette.hairline, RoundedCornerShape(10.dp))
+                        .clickable { showWhatsNew = true }
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .semantics { contentDescription = "What's new in NOOP ${AppChangelog.CURRENT_VERSION}" },
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Campaign,
+                            contentDescription = null,
+                            tint = Palette.accent,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("What's new", style = NoopType.headline, color = Palette.textPrimary)
+                            Text(
+                                "Recent changes and what to expect",
+                                style = NoopType.footnote,
+                                color = Palette.textSecondary,
+                            )
+                        }
+                        Text("›", style = NoopType.title2, color = Palette.accent)
+                    }
+                }
+
                 // Medical disclaimer — inset well with a warning-tinted hairline.
                 Row(
                     modifier = Modifier
@@ -530,6 +574,19 @@ fun SettingsScreen(vm: AppViewModel) {
                         }
                         Text("›", style = NoopType.title2, color = Palette.accent)
                     }
+                }
+            }
+        }
+
+        // What's new sheet, opened from the About row above. Full-screen Dialog so it
+        // covers the whole screen like the macOS .sheet; closing just hides it.
+        if (showWhatsNew) {
+            Dialog(
+                onDismissRequest = { showWhatsNew = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                Surface(modifier = Modifier.fillMaxSize(), color = Palette.surfaceBase) {
+                    WhatsNewSheet(onClose = { showWhatsNew = false })
                 }
             }
         }

@@ -18,6 +18,9 @@ struct SettingsView: View {
     /// Opt-in WHOOP 5/MG protocol experiments (off by default). See [PuffinExperiment].
     @AppStorage(PuffinExperiment.defaultsKey) private var puffinExperiments = false
 
+    /// "What's New" changelog sheet, reachable any time from About.
+    @State private var showWhatsNew = false
+
     var body: some View {
         ScreenScaffold(title: "Settings",
                        subtitle: "Your numbers, your strap, and how NOOP works. All on this Mac.") {
@@ -31,6 +34,9 @@ struct SettingsView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(backupAlertMessage)
+        }
+        .sheet(isPresented: $showWhatsNew) {
+            WhatsNewView(onClose: { showWhatsNew = false })
         }
     }
 
@@ -330,10 +336,18 @@ struct SettingsView: View {
                     Text("NOOP")
                         .font(StrandFont.title2)
                         .foregroundStyle(StrandPalette.textPrimary)
-                    StatePill("v0.1.0", tone: .neutral, showsDot: false)
+                    StatePill("v\(AppChangelog.currentVersion)", tone: .neutral, showsDot: false)
+                    Spacer()
+                    Button {
+                        showWhatsNew = true
+                    } label: {
+                        Label("What's new", systemImage: "sparkles").padding(.horizontal, 4)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(StrandPalette.accent)
                 }
 
-                Text("A standalone macOS companion for your WHOOP. Everything stays on this Mac — your history, your live stream, your numbers. Nothing is uploaded.")
+                Text("A standalone companion for your WHOOP. Everything stays on this device — your history, your live stream, your numbers. Nothing is uploaded. NOOP is an independent, experimental project, not the WHOOP app.")
                     .font(StrandFont.subhead)
                     .foregroundStyle(StrandPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

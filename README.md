@@ -381,6 +381,7 @@ use it at your own risk. Read the full notice in [`DISCLAIMER.md`](DISCLAIMER.md
 
 ## Docs
 
+- [`CHANGELOG.md`](CHANGELOG.md) — release history and what to expect (also shown in-app under **What's new**).
 - [`DISCLAIMER.md`](DISCLAIMER.md) — trademark, interoperability, and medical/legal notice.
 - [`ATTRIBUTION.md`](ATTRIBUTION.md) — full credits and licensing notes.
 - [`docs/DONATIONS.md`](docs/DONATIONS.md) — optional donation addresses (also in-app under **Support**).
